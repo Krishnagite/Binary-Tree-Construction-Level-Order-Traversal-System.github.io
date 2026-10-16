@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Tree BFS Visualizer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#151e2e', 950: '#0b0f19' },
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons (Fallback to simple inline SVGs for stability in single-file) -->
+    
+    <style>
+        body { background-color: #0b0f19; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
+        .node-transition { transition: all 0.5s ease-in-out; }
+        .edge-transition { transition: all 0.5s ease-in-out; stroke-dasharray: 1000; stroke-dashoffset: 0; }
+        .active-edge { animation: dash 1s linear infinite; stroke-dasharray: 8; stroke-dashoffset: 0; }
+        @keyframes dash { to { stroke-dashoffset: -16; } }
+        /* Custom Scrollbar for code/logs */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- CORE ALGORITHMS & DATA STRUCTURES ---
+
+        function parseLevelOrder(arrStr) {
+            try {
+                const arr = JSON.parse(arrStr);
+                if (!Array.isArray(arr) || arr.length === 0) return null;
+                
+                let root = { id: 1, val: arr[0], left: null, right: null };
+                let queue = [root];
+                let i = 1;
+                let idCounter = 2;
+                
+                while (queue.length > 0 && i < arr.length) {
+                    let node = queue.shift();
+                    if (arr[i] !== null && arr[i] !== undefined) {
+                        node.left = { id: idCounter++, val: arr[i], left: null, right: null };
+                        queue.push(node.left);
+                    }
+                    i++;
+                    if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {
+                        node.right = { id: idCounter++, val: arr[i], left: null, right: null };
+                        queue.push(node.right);
+                    }
+                    i++;
+                }
+                return root;
+            } catch (e) {
+                return null; // Invalid format
+            }
+        }
+
+        // Layout algorithm: Inorder traversal for X (guarantees no collisions), Depth for Y
+        function layoutTree(root) {
+            if (!root) return { nodes: [], edges: [], maxDepth: 0, maxX: 0 };
+            let nodes = [];
+            let edges = [];
+            let xRank = 0;
+            let maxDepth = 0;
+
+            function traverse(node, depth, parent = null) {
+                if (!node) return;
+                maxDepth = Math.max(maxDepth, depth);
+                
+                traverse(node.left, depth + 1, node);
+                
+                const currentX = xRank;
+                xRank++;
+                
+                let layoutNode = { ...node, x: currentX, y: depth };
+                nodes.push(layoutNode);
+                
+                if (parent) {
+                    edges.push({ sourceId: parent.id, targetId: node.id });
+                }
+                
+                traverse(node.right, depth + 1, node);
+            }
+            
+            traverse(root, 0);
+            return { nodes, edges, maxDepth, maxX: xRank };
+        }
+
+        // BFS Simulator - Precomputes all states for timeline scrubbing
+        function generateBFSStates(root) {
+            let states = [];
+            if (!root) return states;
+
+            let queue = [{ node: root, level: 0 }];
+            let inQueue = new Set([root.id]);
+            let visited = new Set();
+            let levels = [];
+            
+            const pushState = (activeId, line, logMsg) => {
+                states.push({
+                    queue: queue.map(q => ({ val: q.node.val, level: q.level, id: q.node.id })),
+                    inQueue: new Set(inQueue),
+                    activeNode: activeId,
+                    visited: new Set(visited),
+                    levels: JSON.parse(JSON.stringify(levels)),
+                    codeLine: line,
+                    log: logMsg
+                });
+            };
+
+            pushState(null, 3, "Initialized empty queue and result array. Enqueued root node.");
+
+            while (queue.length > 0) {
+                pushState(null, 5, "Checking if queue is not empty...");
+                
+                let currentItem = queue.shift();
+                let { node, level } = currentItem;
+                inQueue.delete(node.id);
+                
+                pushState(node.id, 6, `Dequeued node ${node.val} from level ${level}.`);
+
+                if (!levels[level]) levels[level] = [];
+                levels[level].push(node.val);
+                
+                pushState(node.id, 7, `Appended ${node.val} to result array at level index ${level}.`);
+
+                if (node.left) {
+                    queue.push({ node: node.left, level: level + 1 });
+                    inQueue.add(node.left.id);
+                    pushState(node.id, 8, `Left child exists. Enqueued ${node.left.val}.`);
+                }
+
+                if (node.right) {
+                    queue.push({ node: node.right, level: level + 1 });
+                    inQueue.add(node.right.id);
+                    pushState(node.id, 9, `Right child exists. Enqueued ${node.right.val}.`);
+                }
+
+                visited.add(node.id);
+                pushState(null, 5, `Finished processing node ${node.val}. Loop continues.`);
+            }
+            
+            pushState(null, 10, "Queue is empty. Traversal complete. Returning result.");
+            return states;
+        }
+
+        // --- ICONS ---
+        const PlayIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-emerald-400"><path d="M5 3l14 9-14 9V3z"/></svg>;
+        const PauseIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>;
+        const ResetIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
+        const StepBackIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-200"><path d="M19 20L9 12l10-8v16z"/><line x1="5" y1="19" x2="5" y2="5"/></svg>;
+        const StepFwdIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-200"><path d="M5 4l10 8-10 8V4z"/><line x1="19" y1="5" x2="19" y2="19"/></svg>;
+
+        // --- COMPONENTS ---
+
+        const CodeViewer = ({ activeLine }) => {
+            const code = [
+                "def levelOrder(root):",
+                "    if not root: return []",
+                "    queue = [root]",
+                "    result = []",
+                "    while queue:",
+                "        node = queue.pop(0)",
+                "        result[node.level].append(node.val)",
+                "        if node.left: queue.append(node.left)",
+                "        if node.right: queue.append(node.right)",
+                "    return result"
+            ];
+
+            return (
+                <div className="bg-slate-900 rounded-lg p-4 font-mono text-sm border border-slate-800 shadow-inner h-64 overflow-y-auto relative">
+                    <div className="absolute top-2 right-2 text-xs font-bold text-slate-500">Python</div>
+                    {code.map((line, i) => (
+                        <div key={i} className={`py-1 px-2 rounded flex ${activeLine === i + 1 ? 'bg-emerald-900/40 border-l-4 border-emerald-500 text-emerald-300' : 'text-slate-400 border-l-4 border-transparent'}`}>
+                            <span className="w-6 text-slate-600 select-none">{i + 1}</span>
+                            <pre className="m-0">{line}</pre>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const defaultTreeStr = "[3, 9, 20, null, null, 15, 7]";
+            const [treeInput, setTreeInput] = useState(defaultTreeStr);
+            const [treeData, setTreeData] = useState(parseLevelOrder(defaultTreeStr));
+            const [error, setError] = useState("");
+            
+            // Simulation State
+            const [states, setStates] = useState([]);
+            const [currentStep, setCurrentStep] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [speed, setSpeed] = useState(1000); // ms per step
+            
+            // Recompute layout and states when tree changes
+            const layout = useMemo(() => layoutTree(treeData), [treeData]);
+            
+            useEffect(() => {
+                const newStates = generateBFSStates(treeData);
+                setStates(newStates);
+                setCurrentStep(0);
+                setIsPlaying(false);
+            }, [treeData]);
+
+            // Playback effect
+            useEffect(() => {
+                let timer;
+                if (isPlaying && currentStep < states.length - 1) {
+                    timer = setTimeout(() => {
+                        setCurrentStep(prev => prev + 1);
+                    }, speed);
+                } else if (currentStep >= states.length - 1) {
+                    setIsPlaying(false);
+                }
+                return () => clearTimeout(timer);
+            }, [isPlaying, currentStep, states.length, speed]);
+
+            const handleTreeUpdate = (val) => {
+                setTreeInput(val);
+                const newTree = parseLevelOrder(val);
+                if (newTree !== null || val === "[]") {
+                    setTreeData(newTree);
+                    setError("");
+                } else {
+                    setError("Invalid LeetCode array format.");
+                }
+            };
+
+            const loadPreset = (preset) => {
+                const presets = {
+                    'balanced': '[1, 2, 3, 4, 5, 6, 7]',
+                    'skewed': '[1, 2, null, 3, null, 4]',
+                    'deep': '[1, 2, 3, 4, 5, null, 6, 7, null, null, 8]'
+                };
+                handleTreeUpdate(presets[preset]);
+            };
+
+            const currentState = states[currentStep] || { 
+                queue: [], inQueue: new Set(), visited: new Set(), activeNode: null, levels: [], codeLine: 0, log: "Awaiting tree..." 
+            };
+
+            // SVG dimensions scaling
+            const padding = 1.5;
+            const viewBoxWidth = Math.max(layout.maxX, 4) * 100;
+            const viewBoxHeight = Math.max(layout.maxDepth + 1, 3) * 100;
+
+            return (
+                <div className="h-screen flex flex-col bg-slate-950 text-slate-200">
+                    
+                    {/* TOP NAVBAR */}
+                    <header className="h-16 border-b border-slate-800 bg-slate-900/50 flex items-center px-6 justify-between shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
+                                <span className="text-emerald-400 font-bold">BFS</span>
+                            </div>
+                            <h1 className="font-semibold text-lg tracking-tight">Level-Order Traversal Visualizer</h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm text-slate-400">Presets:</span>
+                            <button onClick={() => loadPreset('balanced')} className="px-3 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 transition">Balanced</button>
+                            <button onClick={() => loadPreset('skewed')} className="px-3 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 transition">Left Skewed</button>
+                            <button onClick={() => loadPreset('deep')} className="px-3 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 transition">Deep</button>
+                        </div>
+                    </header>
+
+                    {/* MAIN WORKSPACE */}
+                    <div className="flex flex-1 overflow-hidden">
+                        
+                        {/* LEFT/CENTER STAGE (Tree + Queue) */}
+                        <div className="w-[65%] flex flex-col border-r border-slate-800">
+                            
+                            {/* Construction Input Area */}
+                            <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-4 shrink-0">
+                                <span className="text-sm font-medium text-slate-400 whitespace-nowrap">Tree Array:</span>
+                                <input 
+                                    type="text" 
+                                    value={treeInput}
+                                    onChange={(e) => handleTreeUpdate(e.target.value)}
+                                    className={`flex-1 bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700'} rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-emerald-500 transition`}
+                                    placeholder="[3, 9, 20, null, null, 15, 7]"
+                                />
+                                {error && <span className="text-xs text-rose-500">{error}</span>}
+                            </div>
+
+                            {/* SVG Tree Canvas */}
+                            <div className="flex-1 relative bg-slate-950 overflow-hidden cursor-move">
+                                {/* Level Guidelines */}
+                                <div className="absolute inset-0 pointer-events-none opacity-20">
+                                    {Array.from({length: layout.maxDepth + 1}).map((_, i) => (
+                                        <div key={i} className="absolute w-full border-t border-dashed border-slate-500 flex items-start px-2" style={{top: `${(i + 0.5) / (layout.maxDepth + 1.5) * 100}%`}}>
+                                            <span className="text-xs text-slate-400 -mt-2 bg-slate-950 px-1">L{i}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <svg className="w-full h-full" viewBox={`-50 -50 ${viewBoxWidth + 100} ${viewBoxHeight + 100}`}>
+                                    {/* Edges */}
+                                    {layout.edges.map((edge, i) => {
+                                        const source = layout.nodes.find(n => n.id === edge.sourceId);
+                                        const target = layout.nodes.find(n => n.id === edge.targetId);
+                                        
+                                        const isTargetInQueue = currentState.inQueue.has(target.id);
+                                        const isActiveEdge = currentState.activeNode === source.id && isTargetInQueue;
+                                        const isVisited = currentState.visited.has(target.id);
+
+                                        return (
+                                            <line 
+                                                key={i}
+                                                x1={source.x * 100} y1={source.y * 100} 
+                                                x2={target.x * 100} y2={target.y * 100}
+                                                className={`edge-transition ${isActiveEdge ? 'active-edge stroke-amber-400' : isVisited ? 'stroke-indigo-600' : 'stroke-slate-700'}`}
+                                                strokeWidth={isActiveEdge ? 4 : 2}
+                                            />
+                                        )
+                                    })}
+                                    
+                                    {/* Nodes */}
+                                    {layout.nodes.map((node) => {
+                                        const isIdle = !currentState.inQueue.has(node.id) && !currentState.visited.has(node.id) && currentState.activeNode !== node.id;
+                                        const inQueue = currentState.inQueue.has(node.id);
+                                        const isActive = currentState.activeNode === node.id;
+                                        const isVisited = currentState.visited.has(node.id);
+
+                                        let fillColor = "#1e293b"; // slate-800
+                                        let strokeColor = "#475569"; // slate-600
+                                        
+                                        if (inQueue) { fillColor = "#d97706"; strokeColor = "#fbbf24"; } // Amber
+                                        if (isActive) { fillColor = "#059669"; strokeColor = "#34d399"; } // Emerald
+                                        if (isVisited) { fillColor = "#4f46e5"; strokeColor = "#818cf8"; } // Indigo
+
+                                        return (
+                                            <g key={node.id} className="node-transition" transform={`translate(${node.x * 100}, ${node.y * 100})`}>
+                                                {/* Pulse Ring for Active */}
+                                                {isActive && <circle r="28" fill="none" className="stroke-emerald-400 animate-pulse-fast" strokeWidth="3" opacity="0.6" />}
+                                                
+                                                <circle 
+                                                    r="20" 
+                                                    fill={fillColor} 
+                                                    stroke={strokeColor} 
+                                                    strokeWidth="3" 
+                                                    className="node-transition shadow-lg"
+                                                />
+                                                <text 
+                                                    textAnchor="middle" 
+                                                    dy=".3em" 
+                                                    fill="#ffffff" 
+                                                    className="font-mono font-bold text-sm select-none"
+                                                >
+                                                    {node.val}
+                                                </text>
+                                                {/* Queue Order Badge */}
+                                                {inQueue && (
+                                                    <g transform="translate(14, -14)">
+                                                        <circle r="8" fill="#fbbf24" />
+                                                        <text textAnchor="middle" dy=".3em" fill="#000" fontSize="10" fontWeight="bold">
+                                                            {currentState.queue.findIndex(q => q.id === node.id) + 1}
+                                                        </text>
+                                                    </g>
+                                                )}
+                                            </g>
+                                        )
+                                    })}
+                                </svg>
+                            </div>
+
+                            {/* Live FIFO Queue Visualizer & Playback Control */}
+                            <div className="h-48 border-t border-slate-800 bg-slate-900 flex flex-col shrink-0">
+                                <div className="px-4 py-2 border-b border-slate-800/50 flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <span>Live Queue (FIFO)</span>
+                                    <span>Size: {currentState.queue.length}</span>
+                                </div>
+                                <div className="flex-1 flex items-center px-6 gap-3 overflow-x-auto">
+                                    <div className="text-slate-600 font-mono text-sm tracking-widest border-r-2 border-slate-700 pr-4">FRONT</div>
+                                    {currentState.queue.map((item, i) => (
+                                        <div key={i} className="flex flex-col items-center animate-[bounce_0.2s_ease-out]">
+                                            <div className="w-12 h-12 rounded bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center text-amber-300 font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                                                {item.val}
+                                            </div>
+                                            <span className="text-[10px] text-slate-500 mt-1">L{item.level}</span>
+                                        </div>
+                                    ))}
+                                    {currentState.queue.length === 0 && <div className="text-slate-600 italic text-sm">Queue is empty</div>}
+                                    <div className="text-slate-600 font-mono text-sm tracking-widest border-l-2 border-slate-700 pl-4 ml-auto">REAR</div>
+                                </div>
+
+                                {/* Playback Bar */}
+                                <div className="h-14 bg-slate-950 border-t border-slate-800 px-6 flex items-center gap-6">
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setIsPlaying(false); setCurrentStep(0); }} className="p-2 rounded hover:bg-slate-800 transition" title="Reset">
+                                            <ResetIcon />
+                                        </button>
+                                        <button onClick={() => { setIsPlaying(false); setCurrentStep(Math.max(0, currentStep - 1)); }} className="p-2 rounded hover:bg-slate-800 transition" title="Step Back">
+                                            <StepBackIcon />
+                                        </button>
+                                        <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 rounded bg-slate-800 hover:bg-slate-700 transition w-10 flex justify-center border border-slate-700">
+                                            {isPlaying ? <PauseIcon /> : <PlayIcon />}
+                                        </button>
+                                        <button onClick={() => { setIsPlaying(false); setCurrentStep(Math.min(states.length - 1, currentStep + 1)); }} className="p-2 rounded hover:bg-slate-800 transition" title="Step Forward">
+                                            <StepFwdIcon />
+                                        </button>
+                                    </div>
+                                    
+                                    <input 
+                                        type="range" 
+                                        min="0" 
+                                        max={states.length > 0 ? states.length - 1 : 0} 
+                                        value={currentStep}
+                                        onChange={(e) => { setIsPlaying(false); setCurrentStep(Number(e.target.value)); }}
+                                        className="flex-1 accent-emerald-500"
+                                    />
+                                    
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-500 font-mono">SPEED:</span>
+                                        <select 
+                                            value={speed} 
+                                            onChange={(e) => setSpeed(Number(e.target.value))}
+                                            className="bg-slate-900 border border-slate-700 text-xs rounded p-1 outline-none text-emerald-400"
+                                        >
+                                            <option value={2000}>0.5x</option>
+                                            <option value={1000}>1.0x</option>
+                                            <option value={500}>2.0x</option>
+                                            <option value={200}>4.0x</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT SIDEBAR (Inspector) */}
+                        <div className="w-[35%] flex flex-col bg-slate-950 overflow-hidden">
+                            
+                            {/* Telemetry */}
+                            <div className="p-4 grid grid-cols-2 gap-4 border-b border-slate-800 bg-slate-900/50">
+                                <div>
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest">Active Node</div>
+                                    <div className="text-lg font-mono text-emerald-400">{currentState.activeNode ? currentState.activeNode : '-'}</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest">Visited Count</div>
+                                    <div className="text-lg font-mono text-indigo-400">{currentState.visited.size} / {layout.nodes.length}</div>
+                                </div>
+                                <div className="col-span-2 border-t border-slate-800 pt-3 flex justify-between">
+                                    <span className="text-xs text-slate-400">Time: <span className="text-slate-200 font-mono">O(N)</span></span>
+                                    <span className="text-xs text-slate-400">Space: <span className="text-slate-200 font-mono">O(W)</span> width</span>
+                                </div>
+                            </div>
+
+                            {/* 2D Result Array */}
+                            <div className="p-4 border-b border-slate-800 flex-1 min-h-[150px] flex flex-col">
+                                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Result Array</div>
+                                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                                    {currentState.levels.length === 0 && <span className="text-slate-600 italic text-sm">[]</span>}
+                                    {currentState.levels.map((lvl, i) => (
+                                        <div key={i} className="flex items-center gap-3">
+                                            <span className="text-xs text-slate-500 font-mono w-6">L{i}</span>
+                                            <div className="flex-1 bg-slate-900 rounded border border-slate-700/50 p-2 flex flex-wrap gap-2">
+                                                {lvl.map((val, idx) => (
+                                                    <span key={idx} className="bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-sm font-mono animate-[fade-in_0.3s]">
+                                                        {val}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Synchronized Code Viewer */}
+                            <div className="p-4 border-b border-slate-800 bg-slate-950">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Algorithm Engine</span>
+                                </div>
+                                <CodeViewer activeLine={currentState.codeLine} />
+                            </div>
+
+                            {/* Execution Log */}
+                            <div className="p-4 bg-black flex-1 flex flex-col justify-end">
+                                <div className="text-[10px] text-slate-600 uppercase tracking-widest mb-1">Execution Log</div>
+                                <div className="text-sm text-emerald-400 font-mono leading-relaxed border-l-2 border-emerald-500 pl-3 py-1">
+                                    > {currentState.log}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
