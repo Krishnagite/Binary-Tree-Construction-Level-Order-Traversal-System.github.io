@@ -1,502 +1,1077 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Binary Tree BFS Visualizer</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        slate: { 850: '#151e2e', 950: '#0b0f19' },
-                    },
-                    animation: {
-                        'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <style>
-        body { background-color: #0b0f19; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; overflow-x: hidden; }
-        .node-transition { transition: all 0.5s ease-in-out; }
-        .edge-transition { transition: all 0.5s ease-in-out; stroke-dasharray: 1000; stroke-dashoffset: 0; }
-        .active-edge { animation: dash 1s linear infinite; stroke-dasharray: 8; stroke-dashoffset: 0; }
-        @keyframes dash { to { stroke-dashoffset: -16; } }
-        /* Custom Scrollbar for code/logs */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        
-        /* Ensure touch scrolling works on the canvas */
-        .touch-pan { touch-action: pan-x pan-y; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Binary Tree Construction &amp; Level-Order Traversal Visualizer</title>
+  <!-- Tailwind CSS via reliable Cloudflare/JSDelivr CDN with complete inline CSS fallback -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg-main: #0b0f19;
+      --bg-panel: #111827;
+      --bg-card: #1e293b;
+      --border-color: #1f2937;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --indigo: #6366f1;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    /* Smooth SVG transitions */
+    .node-group { transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+    .node-circle { transition: fill 0.3s ease, stroke 0.3s ease, r 0.2s ease; }
+    .edge-line { transition: stroke 0.3s ease, stroke-width 0.3s ease; }
+    .active-edge {
+      stroke-dasharray: 8 6;
+      animation: edgeFlow 0.8s linear infinite;
+    }
+    @keyframes edgeFlow {
+      to { stroke-dashoffset: -14; }
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.85; }
+      70% { transform: scale(1.35); opacity: 0; }
+      100% { transform: scale(1.35); opacity: 0; }
+    }
+    .pulse-ring {
+      transform-origin: center;
+      transform-box: fill-box;
+      animation: pulseRing 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="min-h-screen lg:h-screen flex flex-col bg-[#0b0f19] text-slate-100 select-none">
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+  <!-- TOP HEADER & CONTROLS -->
+  <header class="bg-slate-900/90 border-b border-slate-800 px-3 py-2.5 lg:px-6 flex flex-wrap items-center justify-between gap-2 shrink-0">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/60 flex items-center justify-center font-bold text-emerald-400 text-xs shadow-sm">
+        BFS
+      </div>
+      <div>
+        <h1 class="font-bold text-sm sm:text-base tracking-tight text-white leading-tight">
+          Binary Tree &amp; Level-Order Visualizer
+        </h1>
+        <p class="text-[11px] text-slate-400 hidden sm:block">Interactive Construction &amp; Breadth-First Search Simulator</p>
+      </div>
+    </div>
 
-        // --- CORE ALGORITHMS & DATA STRUCTURES ---
+    <!-- Traversal Variant & Presets -->
+    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <select id="variantSelect" class="bg-slate-950 border border-slate-700 text-emerald-400 text-xs rounded-md px-2.5 py-1.5 font-medium focus:outline-none focus:border-emerald-500">
+        <option value="standard">Variant: Standard BFS</option>
+        <option value="zigzag">Variant: Zigzag (Spiral)</option>
+        <option value="bottomUp">Variant: Bottom-Up</option>
+        <option value="rightView">Variant: Right-Side View</option>
+      </select>
 
-        function parseLevelOrder(arrStr) {
-            try {
-                const arr = JSON.parse(arrStr);
-                if (!Array.isArray(arr) || arr.length === 0) return null;
-                
-                let root = { id: 1, val: arr[0], left: null, right: null };
-                let queue = [root];
-                let i = 1;
-                let idCounter = 2;
-                
-                while (queue.length > 0 && i < arr.length) {
-                    let node = queue.shift();
-                    if (arr[i] !== null && arr[i] !== undefined) {
-                        node.left = { id: idCounter++, val: arr[i], left: null, right: null };
-                        queue.push(node.left);
-                    }
-                    i++;
-                    if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {
-                        node.right = { id: idCounter++, val: arr[i], left: null, right: null };
-                        queue.push(node.right);
-                    }
-                    i++;
-                }
-                return root;
-            } catch (e) {
-                return null; // Invalid format
-            }
+      <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-md border border-slate-800">
+        <button data-preset="default" class="preset-btn px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition">Default</button>
+        <button data-preset="complete" class="preset-btn px-2 py-1 text-[11px] rounded hover:bg-slate-800 text-slate-300 transition">Complete</button>
+        <button data-preset="bst" class="preset-btn px-2 py-1 text-[11px] rounded hover:bg-slate-800 text-slate-300 transition">BST</button>
+        <button data-preset="skewed" class="preset-btn px-2 py-1 text-[11px] rounded hover:bg-slate-800 text-slate-300 transition">Skewed</button>
+        <button data-preset="random" class="preset-btn px-2 py-1 text-[11px] rounded bg-indigo-600/30 border border-indigo-500/40 hover:bg-indigo-600/50 text-indigo-200 transition">Random</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONSTRUCTION INPUT BAR -->
+  <section class="bg-slate-900/50 border-b border-slate-800 px-3 py-2 lg:px-6 flex flex-wrap items-center gap-2 shrink-0">
+    <!-- Mode Tabs -->
+    <div class="flex rounded-md bg-slate-950 p-0.5 border border-slate-800 text-xs">
+      <button id="tabArray" class="px-2.5 py-1 rounded bg-emerald-600 text-white font-medium transition">Array Input</button>
+      <button id="tabTraversal" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition">Preorder + Inorder</button>
+    </div>
+
+    <!-- Mode 1: LeetCode Array Input -->
+    <div id="panelArray" class="flex-1 flex items-center gap-2 min-w-[240px]">
+      <input
+        id="arrayInput"
+        type="text"
+        value="[3, 9, 20, null, null, 15, 7]"
+        placeholder="e.g. [3, 9, 20, null, null, 15, 7]"
+        class="flex-1 bg-slate-950 border border-slate-700 rounded-md px-3 py-1 text-xs sm:text-sm font-mono text-slate-100 focus:outline-none focus:border-emerald-500"
+      />
+      <button id="applyArrayBtn" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-md transition shrink-0">
+        Build Tree
+      </button>
+    </div>
+
+    <!-- Mode 2: Preorder + Inorder Reconstruction -->
+    <div id="panelTraversal" class="hidden flex-1 flex-wrap items-center gap-2 min-w-[240px]">
+      <div class="flex items-center gap-1 flex-1 min-w-[140px]">
+        <span class="text-[11px] text-slate-400 font-mono">Pre:</span>
+        <input id="preorderInput" type="text" value="3, 9, 20, 15, 7" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs font-mono text-slate-100" />
+      </div>
+      <div class="flex items-center gap-1 flex-1 min-w-[140px]">
+        <span class="text-[11px] text-slate-400 font-mono">In:</span>
+        <input id="inorderInput" type="text" value="9, 3, 15, 20, 7" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs font-mono text-slate-100" />
+      </div>
+      <button id="reconstructBtn" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-md transition shrink-0">
+        Reconstruct
+      </button>
+    </div>
+
+    <span id="errorBanner" class="text-xs text-rose-400 font-medium hidden"></span>
+  </section>
+
+  <!-- MAIN WORKSPACE (Stacks on mobile, Side-by-side on desktop) -->
+  <main class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+
+    <!-- LEFT/CENTER STAGE: SVG Canvas + Queue + Playback -->
+    <div class="w-full lg:w-[64%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 lg:h-full">
+
+      <!-- SVG Canvas Wrapper -->
+      <div class="relative h-[340px] sm:h-[400px] lg:h-auto lg:flex-1 bg-[#0b0f19] overflow-hidden flex flex-col">
+
+        <!-- Floating Legend & Zoom Bar -->
+        <div class="absolute top-2.5 left-2.5 right-2.5 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-10">
+          <!-- Legend -->
+          <div class="flex flex-wrap items-center gap-2.5 bg-slate-900/90 backdrop-blur border border-slate-800 px-2.5 py-1 rounded-md text-[10px] sm:text-xs text-slate-300 pointer-events-auto">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-700 inline-block border border-slate-500"></span>Idle</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>In Queue</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>Processing</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block"></span>Visited</span>
+          </div>
+
+          <!-- Zoom Controls -->
+          <div class="flex items-center gap-1 bg-slate-900/90 backdrop-blur border border-slate-800 p-1 rounded-md pointer-events-auto">
+            <button id="zoomInBtn" class="px-2 py-0.5 text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold" title="Zoom In">+</button>
+            <button id="zoomOutBtn" class="px-2 py-0.5 text-xs bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold" title="Zoom Out">&minus;</button>
+            <button id="zoomResetBtn" class="px-2 py-0.5 text-[11px] bg-slate-800 hover:bg-slate-700 rounded text-slate-300">Fit</button>
+          </div>
+        </div>
+
+        <!-- Interactive SVG Workspace -->
+        <div id="svgContainer" class="w-full h-full overflow-auto flex items-center justify-center">
+          <svg id="treeSvg" class="w-full h-full min-w-[320px]" viewBox="0 0 800 420" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+
+        <!-- Node Direct-Manipulation Bar (Appears when a node is clicked/tapped) -->
+        <div id="nodeEditorBar" class="hidden absolute bottom-2 left-2 right-2 bg-slate-900/95 border border-slate-700 rounded-lg p-2 flex flex-wrap items-center justify-between gap-2 shadow-xl z-20">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold text-emerald-400" id="selectedNodeLabel">Node 3</span>
+            <input id="editNodeValInput" type="number" class="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-xs font-mono text-white" />
+            <button id="updateValBtn" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-[11px] rounded border border-slate-600">Rename</button>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="addLeftChildBtn" class="px-2 py-1 bg-emerald-600/30 border border-emerald-500/40 hover:bg-emerald-600/50 text-emerald-200 text-[11px] rounded">+ Left Child</button>
+            <button id="addRightChildBtn" class="px-2 py-1 bg-emerald-600/30 border border-emerald-500/40 hover:bg-emerald-600/50 text-emerald-200 text-[11px] rounded">+ Right Child</button>
+            <button id="deleteNodeBtn" class="px-2 py-1 bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/50 text-rose-200 text-[11px] rounded">Delete</button>
+            <button id="closeEditorBtn" class="px-2 py-1 text-slate-400 hover:text-white text-xs font-bold">&times;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE FIFO QUEUE TRACK -->
+      <div class="bg-slate-900 border-t border-slate-800 flex flex-col shrink-0">
+        <div class="px-3 py-1.5 border-b border-slate-800/80 flex justify-between items-center text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+          <span>Live FIFO Queue</span>
+          <span id="queueSizeBadge" class="text-amber-400 font-mono">Size: 0</span>
+        </div>
+        <div class="h-16 px-3 flex items-center gap-2.5 overflow-x-auto">
+          <span class="text-[10px] font-mono text-slate-500 border-r border-slate-700 pr-2 shrink-0">FRONT (Dequeue)</span>
+          <div id="queueTrack" class="flex items-center gap-2"></div>
+          <span class="text-[10px] font-mono text-slate-500 border-l border-slate-700 pl-2 ml-auto shrink-0">REAR (Enqueue)</span>
+        </div>
+
+        <!-- PLAYBACK TIMELINE CONTROLLER -->
+        <div class="bg-slate-950 border-t border-slate-800 px-3 py-2.5 flex flex-wrap items-center gap-3 justify-between">
+          <div class="flex items-center gap-1.5">
+            <button id="resetBtn" class="p-1.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs" title="Reset">
+              &#8634;
+            </button>
+            <button id="stepBackBtn" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-bold" title="Step Backward">
+              &#9664;&#9664;
+            </button>
+            <button id="playPauseBtn" class="px-3.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold min-w-[68px] transition shadow">
+              &#9654; Play
+            </button>
+            <button id="stepFwdBtn" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-bold" title="Step Forward">
+              &#9654;&#9654;
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2 flex-1 min-w-[140px]">
+            <input id="timelineSlider" type="range" min="0" max="1" value="0" class="w-full accent-emerald-500 cursor-pointer" />
+            <span id="stepCounterText" class="text-[11px] font-mono text-slate-400 shrink-0">0/0</span>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] font-mono text-slate-400">SPEED</span>
+            <select id="speedSelect" class="bg-slate-900 border border-slate-700 text-emerald-400 text-xs rounded px-1.5 py-1 focus:outline-none">
+              <option value="1600">0.5x</option>
+              <option value="900" selected>1.0x</option>
+              <option value="450">2.0x</option>
+              <option value="200">4.0x</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT INSPECTOR SIDEBAR: Telemetry + 2D Output + Code + Log -->
+    <div class="w-full lg:w-[36%] flex flex-col bg-slate-950 lg:h-full lg:overflow-y-auto">
+
+      <!-- Execution Telemetry Bar -->
+      <div class="grid grid-cols-4 gap-2 p-3 border-b border-slate-800 bg-slate-900/40 text-center">
+        <div class="bg-slate-900/90 border border-slate-800 rounded p-1.5">
+          <div class="text-[9px] text-slate-400 uppercase">Active Node</div>
+          <div id="statActiveNode" class="text-sm font-mono font-bold text-emerald-400">-</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 rounded p-1.5">
+          <div class="text-[9px] text-slate-400 uppercase">Depth Level</div>
+          <div id="statDepthLevel" class="text-sm font-mono font-bold text-amber-400">-</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 rounded p-1.5">
+          <div class="text-[9px] text-slate-400 uppercase">Visited</div>
+          <div id="statVisited" class="text-sm font-mono font-bold text-indigo-400">0 / 0</div>
+        </div>
+        <div class="bg-slate-900/90 border border-slate-800 rounded p-1.5">
+          <div class="text-[9px] text-slate-400 uppercase">Complexity</div>
+          <div class="text-[11px] font-mono font-bold text-slate-200">O(N) / O(W)</div>
+        </div>
+      </div>
+
+      <!-- Step Narration Banner -->
+      <div class="px-3 py-2 bg-slate-900/80 border-b border-slate-800">
+        <div class="text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">Live Execution Log</div>
+        <div id="narrationText" class="text-xs font-mono text-emerald-300 border-l-2 border-emerald-500 pl-2 py-0.5 leading-relaxed">
+          Ready. Press Play or Step Forward to start Level-Order Traversal.
+        </div>
+      </div>
+
+      <!-- 2D Level Output Accumulator -->
+      <div class="p-3 border-b border-slate-800 flex flex-col">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">2D Level Output Accumulator</span>
+          <span id="flatOutputPreview" class="text-[11px] font-mono text-indigo-400 truncate max-w-[180px]">[]</span>
+        </div>
+        <div id="levelsOutputContainer" class="space-y-1.5 max-h-36 overflow-y-auto pr-1"></div>
+      </div>
+
+      <!-- Synchronized Code Viewer -->
+      <div class="p-3 flex-1 flex flex-col min-h-[210px]">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Synchronized Code</span>
+          <div class="flex gap-1 bg-slate-900 p-0.5 rounded border border-slate-800 text-[11px]">
+            <button data-lang="python" class="lang-btn px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-mono">Python</button>
+            <button data-lang="js" class="lang-btn px-2 py-0.5 rounded text-slate-400 hover:text-white font-mono">JS</button>
+            <button data-lang="cpp" class="lang-btn px-2 py-0.5 rounded text-slate-400 hover:text-white font-mono">C++</button>
+          </div>
+        </div>
+        <div id="codeContainer" class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5 font-mono text-[11px] sm:text-xs overflow-y-auto flex-1 space-y-0.5"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- APPLICATION SCRIPT (100% Pure Vanilla JS - Zero Transpilation Needed) -->
+  <script>
+    (function () {
+      // --- CODE SNIPPETS FOR SYNCHRONIZED VIEWER ---
+      const CODE_SNIPPETS = {
+        python: [
+          "def levelOrder(root):",
+          "    if not root: return []",
+          "    queue, result = [root], []",
+          "    while queue:",
+          "        node = queue.pop(0)",
+          "        result[node.level].append(node.val)",
+          "        if node.left: queue.append(node.left)",
+          "        if node.right: queue.append(node.right)",
+          "    return result"
+        ],
+        js: [
+          "function levelOrder(root) {",
+          "  if (!root) return [];",
+          "  const queue = [root], result = [];",
+          "  while (queue.length > 0) {",
+          "    const node = queue.shift();",
+          "    result[node.level].push(node.val);",
+          "    if (node.left) queue.push(node.left);",
+          "    if (node.right) queue.push(node.right);",
+          "  }",
+          "  return result;"
+        ],
+        cpp: [
+          "vector<vector<int>> levelOrder(TreeNode* root) {",
+          "  if (!root) return {};",
+          "  queue<TreeNode*> q; q.push(root);",
+          "  while (!q.empty()) {",
+          "    TreeNode* node = q.front(); q.pop();",
+          "    result[level].push_back(node->val);",
+          "    if (node->left) q.push(node->left);",
+          "    if (node->right) q.push(node->right);",
+          "  }",
+          "  return result;"
+        ]
+      };
+
+      // --- APPLICATION STATE ---
+      let nextNodeId = 100;
+      let rootNode = null;
+      let traversalVariant = "standard";
+      let activeLang = "python";
+      let states = [];
+      let currentStep = 0;
+      let isPlaying = false;
+      let playTimer = null;
+      let speedMs = 900;
+      let selectedNodeId = null;
+      let zoomScale = 1;
+
+      // --- DOM ELEMENTS ---
+      const treeSvg = document.getElementById("treeSvg");
+      const arrayInput = document.getElementById("arrayInput");
+      const applyArrayBtn = document.getElementById("applyArrayBtn");
+      const errorBanner = document.getElementById("errorBanner");
+      const queueTrack = document.getElementById("queueTrack");
+      const queueSizeBadge = document.getElementById("queueSizeBadge");
+      const levelsOutputContainer = document.getElementById("levelsOutputContainer");
+      const flatOutputPreview = document.getElementById("flatOutputPreview");
+      const codeContainer = document.getElementById("codeContainer");
+      const narrationText = document.getElementById("narrationText");
+      const statActiveNode = document.getElementById("statActiveNode");
+      const statDepthLevel = document.getElementById("statDepthLevel");
+      const statVisited = document.getElementById("statVisited");
+      const timelineSlider = document.getElementById("timelineSlider");
+      const stepCounterText = document.getElementById("stepCounterText");
+      const playPauseBtn = document.getElementById("playPauseBtn");
+      const variantSelect = document.getElementById("variantSelect");
+      const speedSelect = document.getElementById("speedSelect");
+      const nodeEditorBar = document.getElementById("nodeEditorBar");
+      const selectedNodeLabel = document.getElementById("selectedNodeLabel");
+      const editNodeValInput = document.getElementById("editNodeValInput");
+
+      // --- 1. PARSE & SERIALIZE BINARY TREE ---
+      function parseArrayToTree(inputStr) {
+        let cleaned = inputStr.trim();
+        if (!cleaned.startsWith("[")) cleaned = "[" + cleaned + "]";
+        const arr = JSON.parse(cleaned);
+        if (!Array.isArray(arr) || arr.length === 0 || arr[0] === null) return null;
+
+        let idCount = 1;
+        const root = { id: idCount++, val: arr[0], left: null, right: null };
+        const q = [root];
+        let i = 1;
+
+        while (q.length > 0 && i < arr.length) {
+          const curr = q.shift();
+          if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {
+            curr.left = { id: idCount++, val: arr[i], left: null, right: null };
+            q.push(curr.left);
+          }
+          i++;
+          if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {
+            curr.right = { id: idCount++, val: arr[i], left: null, right: null };
+            q.push(curr.right);
+          }
+          i++;
+        }
+        nextNodeId = idCount + 10;
+        return root;
+      }
+
+      function serializeTreeToArray(root) {
+        if (!root) return "[]";
+        const res = [];
+        const q = [root];
+        while (q.length > 0) {
+          const n = q.shift();
+          if (n) {
+            res.push(n.val);
+            q.push(n.left || null);
+            q.push(n.right || null);
+          } else {
+            res.push(null);
+          }
+        }
+        while (res.length > 0 && res[res.length - 1] === null) {
+          res.pop();
+        }
+        return "[" + res.map(v => (v === null ? "null" : v)).join(", ") + "]";
+      }
+
+      function buildFromPreIn(preArr, inArr) {
+        if (!preArr.length || preArr.length !== inArr.length) return null;
+        let idCount = 1;
+        function helper(preStart, inStart, inEnd) {
+          if (preStart >= preArr.length || inStart > inEnd) return null;
+          const rootVal = preArr[preStart];
+          const node = { id: idCount++, val: rootVal, left: null, right: null };
+          const inIndex = inArr.indexOf(rootVal, inStart);
+          if (inIndex === -1 || inIndex > inEnd) throw new Error("Mismatch");
+          const leftSize = inIndex - inStart;
+          node.left = helper(preStart + 1, inStart, inIndex - 1);
+          node.right = helper(preStart + 1 + leftSize, inIndex + 1, inEnd);
+          return node;
+        }
+        return helper(0, 0, inArr.length - 1);
+      }
+
+      // --- 2. COLLISION-FREE TREE LAYOUT ENGINE ---
+      function computeTreeLayout(root) {
+        if (!root) return { nodes: [], edges: [], maxDepth: 0, totalWidth: 1 };
+        const nodes = [];
+        const edges = [];
+        let xIndex = 0;
+        let maxDepth = 0;
+
+        function inorderLayout(node, depth, parent) {
+          if (!node) return;
+          maxDepth = Math.max(maxDepth, depth);
+          inorderLayout(node.left, depth + 1, node);
+
+          const xPos = xIndex++;
+          nodes.push({
+            id: node.id,
+            val: node.val,
+            gridX: xPos,
+            gridY: depth,
+            hasLeft: !!node.left,
+            hasRight: !!node.right
+          });
+
+          if (parent) {
+            edges.push({ sourceId: parent.id, targetId: node.id });
+          }
+
+          inorderLayout(node.right, depth + 1, node);
         }
 
-        function layoutTree(root) {
-            if (!root) return { nodes: [], edges: [], maxDepth: 0, maxX: 0 };
-            let nodes = [];
-            let edges = [];
-            let xRank = 0;
-            let maxDepth = 0;
+        inorderLayout(root, 0, null);
+        return { nodes, edges, maxDepth, totalWidth: Math.max(xIndex, 1) };
+      }
 
-            function traverse(node, depth, parent = null) {
-                if (!node) return;
-                maxDepth = Math.max(maxDepth, depth);
-                
-                traverse(node.left, depth + 1, node);
-                
-                const currentX = xRank;
-                xRank++;
-                
-                let layoutNode = { ...node, x: currentX, y: depth };
-                nodes.push(layoutNode);
-                
-                if (parent) {
-                    edges.push({ sourceId: parent.id, targetId: node.id });
-                }
-                
-                traverse(node.right, depth + 1, node);
-            }
-            
-            traverse(root, 0);
-            return { nodes, edges, maxDepth, maxX: xRank };
+      // --- 3. BFS SIMULATION STATE GENERATOR ---
+      function generateSimulationStates(root, variant) {
+        const snapshots = [];
+        if (!root) {
+          snapshots.push({
+            queue: [],
+            inQueueIds: [],
+            visitedIds: [],
+            activeNodeId: null,
+            activeLevel: null,
+            levels: [],
+            codeLine: 2,
+            narration: "Tree is empty. Returning empty array []."
+          });
+          return snapshots;
         }
 
-        function generateBFSStates(root) {
-            let states = [];
-            if (!root) return states;
+        const q = [{ node: root, level: 0 }];
+        const inQueue = new Set([root.id]);
+        const visited = new Set();
+        const rawLevels = [];
 
-            let queue = [{ node: root, level: 0 }];
-            let inQueue = new Set([root.id]);
-            let visited = new Set();
-            let levels = [];
-            
-            const pushState = (activeId, line, logMsg) => {
-                states.push({
-                    queue: queue.map(q => ({ val: q.node.val, level: q.level, id: q.node.id })),
-                    inQueue: new Set(inQueue),
-                    activeNode: activeId,
-                    visited: new Set(visited),
-                    levels: JSON.parse(JSON.stringify(levels)),
-                    codeLine: line,
-                    log: logMsg
-                });
-            };
-
-            pushState(null, 3, "Initialized empty queue and result array. Enqueued root node.");
-
-            while (queue.length > 0) {
-                pushState(null, 5, "Checking if queue is not empty...");
-                
-                let currentItem = queue.shift();
-                let { node, level } = currentItem;
-                inQueue.delete(node.id);
-                
-                pushState(node.id, 6, `Dequeued node ${node.val} from level ${level}.`);
-
-                if (!levels[level]) levels[level] = [];
-                levels[level].push(node.val);
-                
-                pushState(node.id, 7, `Appended ${node.val} to result array at level index ${level}.`);
-
-                if (node.left) {
-                    queue.push({ node: node.left, level: level + 1 });
-                    inQueue.add(node.left.id);
-                    pushState(node.id, 8, `Left child exists. Enqueued ${node.left.val}.`);
-                }
-
-                if (node.right) {
-                    queue.push({ node: node.right, level: level + 1 });
-                    inQueue.add(node.right.id);
-                    pushState(node.id, 9, `Right child exists. Enqueued ${node.right.val}.`);
-                }
-
-                visited.add(node.id);
-                pushState(null, 5, `Finished processing node ${node.val}. Loop continues.`);
-            }
-            
-            pushState(null, 10, "Queue is empty. Traversal complete. Returning result.");
-            return states;
+        function formatLevelsForVariant(levelsMatrix) {
+          const copy = levelsMatrix.map(arr => arr.slice());
+          if (variant === "zigzag") {
+            return copy.map((lvl, idx) => (idx % 2 === 1 ? lvl.slice().reverse() : lvl));
+          }
+          if (variant === "bottomUp") {
+            return copy.slice().reverse();
+          }
+          if (variant === "rightView") {
+            return copy.map(lvl => (lvl.length > 0 ? [lvl[lvl.length - 1]] : []));
+          }
+          return copy;
         }
 
-        // --- ICONS ---
-        const PlayIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-emerald-400"><path d="M5 3l14 9-14 9V3z"/></svg>;
-        const PauseIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>;
-        const ResetIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
-        const StepBackIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-200"><path d="M19 20L9 12l10-8v16z"/><line x1="5" y1="19" x2="5" y2="5"/></svg>;
-        const StepFwdIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-200"><path d="M5 4l10 8-10 8V4z"/><line x1="19" y1="5" x2="19" y2="19"/></svg>;
+        function recordSnapshot(activeId, activeLvl, line, msg) {
+          snapshots.push({
+            queue: q.map(item => ({ id: item.node.id, val: item.node.val, level: item.level })),
+            inQueueIds: Array.from(inQueue),
+            visitedIds: Array.from(visited),
+            activeNodeId: activeId,
+            activeLevel: activeLvl,
+            levels: formatLevelsForVariant(rawLevels),
+            codeLine: line,
+            narration: msg
+          });
+        }
 
-        // --- COMPONENTS ---
+        recordSnapshot(null, 0, 3, "Initialized FIFO queue with root node (" + root.val + ") at Level 0.");
 
-        const CodeViewer = ({ activeLine }) => {
-            const code = [
-                "def levelOrder(root):",
-                "    if not root: return []",
-                "    queue = [root]",
-                "    result = []",
-                "    while queue:",
-                "        node = queue.pop(0)",
-                "        result[node.level].append(node.val)",
-                "        if node.left: queue.append(node.left)",
-                "        if node.right: queue.append(node.right)",
-                "    return result"
-            ];
+        while (q.length > 0) {
+          const current = q.shift();
+          const node = current.node;
+          const lvl = current.level;
+          inQueue.delete(node.id);
 
+          recordSnapshot(node.id, lvl, 5, "Dequeued node " + node.val + " (Level " + lvl + ") from front of queue.");
+
+          if (!rawLevels[lvl]) rawLevels[lvl] = [];
+          rawLevels[lvl].push(node.val);
+
+          let variantNote = "Added node " + node.val + " to Level " + lvl + " output.";
+          if (variant === "zigzag" && lvl % 2 === 1) {
+            variantNote = "Zigzag odd level (" + lvl + "): inserted " + node.val + " in reverse order.";
+          } else if (variant === "rightView") {
+            variantNote = "Updated Right-Side View candidate for Level " + lvl + " to " + node.val + ".";
+          }
+          recordSnapshot(node.id, lvl, 6, variantNote);
+
+          if (node.left) {
+            q.push({ node: node.left, level: lvl + 1 });
+            inQueue.add(node.left.id);
+            recordSnapshot(node.id, lvl, 7, "Enqueued left child (" + node.left.val + ") to rear of queue (Level " + (lvl + 1) + ").");
+          }
+
+          if (node.right) {
+            q.push({ node: node.right, level: lvl + 1 });
+            inQueue.add(node.right.id);
+            recordSnapshot(node.id, lvl, 8, "Enqueued right child (" + node.right.val + ") to rear of queue (Level " + (lvl + 1) + ").");
+          }
+
+          visited.add(node.id);
+          recordSnapshot(null, lvl, 4, "Completed node " + node.val + ". Checking if queue has remaining nodes.");
+        }
+
+        recordSnapshot(null, null, 9, "Queue is empty! Level-Order Traversal (" + variant + ") finished.");
+        return snapshots;
+      }
+
+      // --- 4. RENDERING FUNCTIONS ---
+      function renderAll() {
+        const layout = computeTreeLayout(rootNode);
+        const snap = states[currentStep] || states[0];
+        renderSvgCanvas(layout, snap);
+        renderQueue(snap);
+        renderInspector(layout, snap);
+        renderCode(snap.codeLine);
+        updatePlaybackUI();
+      }
+
+      function renderSvgCanvas(layout, snap) {
+        const hSpacing = 78;
+        const vSpacing = 86;
+        const marginX = 70;
+        const marginY = 55;
+
+        const contentW = Math.max((layout.totalWidth - 1) * hSpacing + marginX * 2, 480);
+        const contentH = Math.max((layout.maxDepth + 1) * vSpacing + marginY * 2, 320);
+
+        const zoomedW = contentW / zoomScale;
+        const zoomedH = contentH / zoomScale;
+        const offsetX = (contentW - zoomedW) / 2;
+        const offsetY = (contentH - zoomedH) / 2;
+        treeSvg.setAttribute("viewBox", offsetX + " " + offsetY + " " + zoomedW + " " + zoomedH);
+
+        const posMap = {};
+        layout.nodes.forEach(n => {
+          const x = layout.totalWidth === 1
+            ? contentW / 2
+            : marginX + n.gridX * ((contentW - marginX * 2) / Math.max(layout.totalWidth - 1, 1));
+          const y = marginY + n.gridY * vSpacing;
+          posMap[n.id] = { x, y, node: n };
+        });
+
+        let svgHtml = "";
+
+        // 1. Level Dashed Guide Lines
+        for (let d = 0; d <= layout.maxDepth; d++) {
+          const y = marginY + d * vSpacing;
+          svgHtml +=
+            '<line x1="16" y1="' + y + '" x2="' + (contentW - 16) + '" y2="' + y + '" stroke="#1e293b" stroke-dasharray="5 5" stroke-width="1" />' +
+            '<text x="20" y="' + (y - 8) + '" fill="#475569" font-size="11" font-family="monospace">L' + d + '</text>';
+        }
+
+        // 2. Edges
+        layout.edges.forEach(e => {
+          const s = posMap[e.sourceId];
+          const t = posMap[e.targetId];
+          if (!s || !t) return;
+
+          const isTargetQueued = snap.inQueueIds.includes(e.targetId);
+          const isTargetVisited = snap.visitedIds.includes(e.targetId);
+          const isActiveEdge = snap.activeNodeId === e.sourceId && isTargetQueued;
+
+          let stroke = "#334155";
+          let width = "2.5";
+          let cls = "edge-line";
+
+          if (isActiveEdge) {
+            stroke = "#fbbf24";
+            width = "3.5";
+            cls = "edge-line active-edge";
+          } else if (isTargetVisited || snap.activeNodeId === e.targetId) {
+            stroke = "#6366f1";
+            width = "3";
+          }
+
+          svgHtml += '<line x1="' + s.x + '" y1="' + s.y + '" x2="' + t.x + '" y2="' + t.y + '" stroke="' + stroke + '" stroke-width="' + width + '" class="' + cls + '" />';
+        });
+
+        // 3. Ghost "+" Child Nodes for Direct Manipulation
+        layout.nodes.forEach(n => {
+          if (n.gridY >= 5) return; // Cap depth at 5 for clean UI
+          const p = posMap[n.id];
+          const childY = p.y + vSpacing * 0.72;
+          const offset = 34;
+
+          if (!n.hasLeft) {
+            const lx = p.x - offset;
+            svgHtml +=
+              '<g class="ghost-add cursor-pointer opacity-35 hover:opacity-100" data-parent="' + n.id + '" data-dir="left">' +
+              '<line x1="' + p.x + '" y1="' + p.y + '" x2="' + lx + '" y2="' + childY + '" stroke="#334155" stroke-dasharray="3 3" />' +
+              '<circle cx="' + lx + '" cy="' + childY + '" r="11" fill="#0f172a" stroke="#475569" stroke-dasharray="3 2" />' +
+              '<text x="' + lx + '" y="' + (childY + 3.5) + '" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">+L</text>' +
+              '</g>';
+          }
+          if (!n.hasRight) {
+            const rx = p.x + offset;
+            svgHtml +=
+              '<g class="ghost-add cursor-pointer opacity-35 hover:opacity-100" data-parent="' + n.id + '" data-dir="right">' +
+              '<line x1="' + p.x + '" y1="' + p.y + '" x2="' + rx + '" y2="' + childY + '" stroke="#334155" stroke-dasharray="3 3" />' +
+              '<circle cx="' + rx + '" cy="' + childY + '" r="11" fill="#0f172a" stroke="#475569" stroke-dasharray="3 2" />' +
+              '<text x="' + rx + '" y="' + (childY + 3.5) + '" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="monospace">+R</text>' +
+              '</g>';
+          }
+        });
+
+        // 4. Tree Nodes
+        layout.nodes.forEach(n => {
+          const p = posMap[n.id];
+          const isQueued = snap.inQueueIds.includes(n.id);
+          const isVisited = snap.visitedIds.includes(n.id);
+          const isActive = snap.activeNodeId === n.id;
+          const isSelected = selectedNodeId === n.id;
+
+          let fill = "#1e293b";
+          let stroke = "#475569";
+
+          if (isQueued) {
+            fill = "#b45309";
+            stroke = "#fbbf24";
+          }
+          if (isActive) {
+            fill = "#059669";
+            stroke = "#34d399";
+          }
+          if (isVisited) {
+            fill = "#4338ca";
+            stroke = "#818cf8";
+          }
+          if (isSelected) {
+            stroke = "#38bdf8";
+          }
+
+          const queueIdx = snap.queue.findIndex(qItem => qItem.id === n.id);
+          const visitedIdx = snap.visitedIds.indexOf(n.id);
+
+          svgHtml += '<g class="node-group" data-node-id="' + n.id + '" transform="translate(' + p.x + ',' + p.y + ')">';
+
+          if (isActive) {
+            svgHtml += '<circle r="27" fill="none" stroke="#10b981" stroke-width="3" class="pulse-ring" />';
+          }
+
+          svgHtml +=
+            '<circle r="21" fill="' + fill + '" stroke="' + stroke + '" stroke-width="3" class="node-circle" />' +
+            '<text text-anchor="middle" dy="0.35em" fill="#ffffff" font-size="13" font-weight="bold" font-family="monospace">' +
+            n.val +
+            '</text>';
+
+          if (isQueued && queueIdx !== -1) {
+            svgHtml +=
+              '<g transform="translate(15, -15)">' +
+              '<circle r="8.5" fill="#fbbf24" />' +
+              '<text text-anchor="middle" dy="0.35em" fill="#0f172a" font-size="9.5" font-weight="bold" font-family="monospace">' +
+              (queueIdx + 1) +
+              '</text>' +
+              '</g>';
+          } else if (isVisited && visitedIdx !== -1) {
+            svgHtml +=
+              '<g transform="translate(15, -15)">' +
+              '<circle r="8.5" fill="#6366f1" stroke="#0b0f19" stroke-width="1.5" />' +
+              '<text text-anchor="middle" dy="0.35em" fill="#ffffff" font-size="9" font-weight="bold" font-family="monospace">' +
+              (visitedIdx + 1) +
+              '</text>' +
+              '</g>';
+          }
+
+          svgHtml += '</g>';
+        });
+
+        treeSvg.innerHTML = svgHtml;
+
+        // Bind Node Click Events
+        treeSvg.querySelectorAll(".node-group").forEach(el => {
+          el.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            const id = Number(this.getAttribute("data-node-id"));
+            openNodeEditor(id);
+          });
+        });
+
+        // Bind Ghost "+" Click Events
+        treeSvg.querySelectorAll(".ghost-add").forEach(el => {
+          el.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            const parentId = Number(this.getAttribute("data-parent"));
+            const dir = this.getAttribute("data-dir");
+            addChildToNode(parentId, dir);
+          });
+        });
+      }
+
+      function renderQueue(snap) {
+        queueSizeBadge.textContent = "Size: " + snap.queue.length;
+        if (snap.queue.length === 0) {
+          queueTrack.innerHTML = '<span class="text-xs italic text-slate-600">Queue is empty</span>';
+          return;
+        }
+        queueTrack.innerHTML = snap.queue
+          .map(
+            item =>
+              '<div class="flex flex-col items-center shrink-0">' +
+              '<div class="w-9 h-9 rounded-md bg-amber-500/20 border border-amber-400 flex items-center justify-center text-amber-300 font-mono font-bold text-xs shadow">' +
+              item.val +
+              '</div>' +
+              '<span class="text-[9px] text-slate-400 font-mono mt-0.5">L' + item.level + '</span>' +
+              '</div>'
+          )
+          .join("");
+      }
+
+      function renderInspector(layout, snap) {
+        const activeObj = layout.nodes.find(n => n.id === snap.activeNodeId);
+        statActiveNode.textContent = activeObj ? activeObj.val : "-";
+        statDepthLevel.textContent = snap.activeLevel !== null && snap.activeLevel !== undefined ? "L" + snap.activeLevel : "-";
+        statVisited.textContent = snap.visitedIds.length + " / " + layout.nodes.length;
+        narrationText.textContent = snap.narration;
+
+        const flat = [];
+        snap.levels.forEach(l => l.forEach(v => flat.push(v)));
+        flatOutputPreview.textContent = "[" + flat.join(", ") + "]";
+
+        if (snap.levels.length === 0) {
+          levelsOutputContainer.innerHTML = '<div class="text-xs italic text-slate-600">No levels visited yet</div>';
+          return;
+        }
+
+        levelsOutputContainer.innerHTML = snap.levels
+          .map(
+            (lvlArr, idx) =>
+              '<div class="flex items-center gap-2">' +
+              '<span class="text-[10px] font-mono text-slate-400 w-7 shrink-0">' +
+              (traversalVariant === "bottomUp" ? "Out" : "L" + idx) +
+              '</span>' +
+              '<div class="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 flex flex-wrap gap-1.5">' +
+              lvlArr
+                .map(
+                  v =>
+                    '<span class="px-1.5 py-0.5 rounded bg-indigo-500/25 border border-indigo-500/40 text-indigo-200 font-mono text-xs">' +
+                    v +
+                    '</span>'
+                )
+                .join("") +
+              '</div>' +
+              '</div>'
+          )
+          .join("");
+      }
+
+      function renderCode(activeLine) {
+        const lines = CODE_SNIPPETS[activeLang] || CODE_SNIPPETS.python;
+        codeContainer.innerHTML = lines
+          .map((lineText, idx) => {
+            const lineNum = idx + 1;
+            const isHighlighted = lineNum === activeLine;
+            const rowClass = isHighlighted
+              ? "bg-emerald-900/40 border-l-2 border-emerald-400 text-emerald-200"
+              : "text-slate-400 border-l-2 border-transparent";
             return (
-                <div className="bg-slate-900 rounded-lg p-3 sm:p-4 font-mono text-[10px] sm:text-xs md:text-sm border border-slate-800 shadow-inner overflow-y-auto relative h-48 lg:h-64">
-                    <div className="absolute top-2 right-2 text-[10px] font-bold text-slate-500 hidden sm:block">Python</div>
-                    {code.map((line, i) => (
-                        <div key={i} className={`py-1 px-1 sm:px-2 rounded flex ${activeLine === i + 1 ? 'bg-emerald-900/40 border-l-4 border-emerald-500 text-emerald-300' : 'text-slate-400 border-l-4 border-transparent'}`}>
-                            <span className="w-4 sm:w-6 text-slate-600 select-none">{i + 1}</span>
-                            <pre className="m-0 whitespace-pre-wrap sm:whitespace-pre">{line}</pre>
-                        </div>
-                    ))}
-                </div>
+              '<div class="px-2 py-0.5 rounded flex items-center ' + rowClass + '">' +
+              '<span class="w-5 text-slate-600 select-none text-[10px]">' + lineNum + '</span>' +
+              '<pre class="m-0 overflow-x-auto">' + lineText.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</pre>' +
+              '</div>'
             );
-        };
+          })
+          .join("");
+      }
 
-        const App = () => {
-            const defaultTreeStr = "[3, 9, 20, null, null, 15, 7]";
-            const [treeInput, setTreeInput] = useState(defaultTreeStr);
-            const [treeData, setTreeData] = useState(parseLevelOrder(defaultTreeStr));
-            const [error, setError] = useState("");
-            
-            // Simulation State
-            const [states, setStates] = useState([]);
-            const [currentStep, setCurrentStep] = useState(0);
-            const [isPlaying, setIsPlaying] = useState(false);
-            const [speed, setSpeed] = useState(1000); 
-            
-            const layout = useMemo(() => layoutTree(treeData), [treeData]);
-            
-            useEffect(() => {
-                const newStates = generateBFSStates(treeData);
-                setStates(newStates);
-                setCurrentStep(0);
-                setIsPlaying(false);
-            }, [treeData]);
+      function updatePlaybackUI() {
+        const maxIdx = Math.max(states.length - 1, 0);
+        timelineSlider.max = String(maxIdx);
+        timelineSlider.value = String(currentStep);
+        stepCounterText.textContent = currentStep + "/" + maxIdx;
+        playPauseBtn.innerHTML = isPlaying ? "&#10074;&#10074; Pause" : "&#9654; Play";
+      }
 
-            useEffect(() => {
-                let timer;
-                if (isPlaying && currentStep < states.length - 1) {
-                    timer = setTimeout(() => {
-                        setCurrentStep(prev => prev + 1);
-                    }, speed);
-                } else if (currentStep >= states.length - 1) {
-                    setIsPlaying(false);
-                }
-                return () => clearTimeout(timer);
-            }, [isPlaying, currentStep, states.length, speed]);
+      // --- 5. DIRECT TREE MANIPULATION HELPERS ---
+      function findNodeAndParent(curr, targetId, parent = null) {
+        if (!curr) return null;
+        if (curr.id === targetId) return { node: curr, parent };
+        return (
+          findNodeAndParent(curr.left, targetId, curr) ||
+          findNodeAndParent(curr.right, targetId, curr)
+        );
+      }
 
-            const handleTreeUpdate = (val) => {
-                setTreeInput(val);
-                const newTree = parseLevelOrder(val);
-                if (newTree !== null || val === "[]") {
-                    setTreeData(newTree);
-                    setError("");
-                } else {
-                    setError("Invalid LeetCode format.");
-                }
-            };
+      function openNodeEditor(nodeId) {
+        const found = findNodeAndParent(rootNode, nodeId);
+        if (!found) return;
+        selectedNodeId = nodeId;
+        selectedNodeLabel.textContent = "Node (" + found.node.val + ")";
+        editNodeValInput.value = found.node.val;
+        nodeEditorBar.classList.remove("hidden");
+        renderAll();
+      }
 
-            const loadPreset = (preset) => {
-                const presets = {
-                    'balanced': '[1, 2, 3, 4, 5, 6, 7]',
-                    'skewed': '[1, 2, null, 3, null, 4]',
-                    'deep': '[1, 2, 3, 4, 5, null, 6, 7, null, null, 8]'
-                };
-                handleTreeUpdate(presets[preset]);
-            };
+      function addChildToNode(parentId, direction) {
+        const found = findNodeAndParent(rootNode, parentId);
+        if (!found) return;
+        const newVal = Math.floor(Math.random() * 89) + 10;
+        const newChild = { id: nextNodeId++, val: newVal, left: null, right: null };
+        if (direction === "left") found.node.left = newChild;
+        else found.node.right = newChild;
+        syncTreeChanges();
+      }
 
-            const currentState = states[currentStep] || { 
-                queue: [], inQueue: new Set(), visited: new Set(), activeNode: null, levels: [], codeLine: 0, log: "Awaiting tree..." 
-            };
+      function syncTreeChanges() {
+        stopPlayback();
+        arrayInput.value = serializeTreeToArray(rootNode);
+        states = generateSimulationStates(rootNode, traversalVariant);
+        currentStep = 0;
+        renderAll();
+      }
 
-            const viewBoxWidth = Math.max(layout.maxX, 4) * 100;
-            const viewBoxHeight = Math.max(layout.maxDepth + 1, 3) * 100;
+      // --- 6. PLAYBACK CONTROLS ---
+      function startPlayback() {
+        if (currentStep >= states.length - 1) {
+          currentStep = 0;
+        }
+        isPlaying = true;
+        updatePlaybackUI();
+        scheduleNextTick();
+      }
 
-            return (
-                <div className="h-screen flex flex-col bg-slate-950 text-slate-200">
-                    
-                    {/* TOP NAVBAR */}
-                    <header className="py-3 lg:h-16 border-b border-slate-800 bg-slate-900/50 flex flex-col lg:flex-row items-start lg:items-center px-4 lg:px-6 justify-between shrink-0 gap-3 lg:gap-0">
-                        <div className="flex items-center gap-3">
-                            <div className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
-                                <span className="text-emerald-400 font-bold text-xs lg:text-sm">BFS</span>
-                            </div>
-                            <h1 className="font-semibold text-base lg:text-lg tracking-tight">Level-Order Visualizer</h1>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 lg:gap-4 w-full lg:w-auto">
-                            <span className="text-xs lg:text-sm text-slate-400">Presets:</span>
-                            <button onClick={() => loadPreset('balanced')} className="px-2 py-1 lg:px-3 text-[10px] lg:text-xs rounded bg-slate-800 hover:bg-slate-700 transition border border-slate-700">Balanced</button>
-                            <button onClick={() => loadPreset('skewed')} className="px-2 py-1 lg:px-3 text-[10px] lg:text-xs rounded bg-slate-800 hover:bg-slate-700 transition border border-slate-700">Skewed</button>
-                            <button onClick={() => loadPreset('deep')} className="px-2 py-1 lg:px-3 text-[10px] lg:text-xs rounded bg-slate-800 hover:bg-slate-700 transition border border-slate-700">Deep</button>
-                        </div>
-                    </header>
+      function stopPlayback() {
+        isPlaying = false;
+        if (playTimer) clearTimeout(playTimer);
+        playTimer = null;
+        updatePlaybackUI();
+      }
 
-                    {/* MAIN WORKSPACE - Stack on Mobile, Row on Desktop */}
-                    <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
-                        
-                        {/* LEFT/CENTER STAGE */}
-                        <div className="w-full lg:w-[65%] flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 shrink-0 lg:shrink h-[65vh] lg:h-full">
-                            
-                            {/* Construction Input Area */}
-                            <div className="p-3 lg:p-4 bg-slate-900 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 shrink-0">
-                                <span className="text-xs lg:text-sm font-medium text-slate-400 whitespace-nowrap">Tree Array:</span>
-                                <input 
-                                    type="text" 
-                                    value={treeInput}
-                                    onChange={(e) => handleTreeUpdate(e.target.value)}
-                                    className={`w-full bg-slate-950 border ${error ? 'border-rose-500' : 'border-slate-700'} rounded px-3 py-1.5 text-xs lg:text-sm font-mono focus:outline-none focus:border-emerald-500 transition`}
-                                    placeholder="[3, 9, 20, null, null, 15, 7]"
-                                />
-                                {error && <span className="text-[10px] text-rose-500 absolute sm:static right-4 top-14">{error}</span>}
-                            </div>
+      function scheduleNextTick() {
+        if (!isPlaying) return;
+        playTimer = setTimeout(() => {
+          if (currentStep < states.length - 1) {
+            currentStep++;
+            renderAll();
+            scheduleNextTick();
+          } else {
+            stopPlayback();
+          }
+        }, speedMs);
+      }
 
-                            {/* SVG Tree Canvas (Scrollable on small screens) */}
-                            <div className="flex-1 relative bg-slate-950 overflow-auto touch-pan">
-                                {/* Level Guidelines */}
-                                <div className="absolute inset-0 pointer-events-none opacity-20 min-w-[600px] lg:min-w-0" style={{ height: Math.max(viewBoxHeight, 300) }}>
-                                    {Array.from({length: layout.maxDepth + 1}).map((_, i) => (
-                                        <div key={i} className="absolute w-full border-t border-dashed border-slate-500 flex items-start px-2" style={{top: `${(i + 0.5) / (layout.maxDepth + 1.5) * 100}%`}}>
-                                            <span className="text-[10px] lg:text-xs text-slate-400 -mt-2 bg-slate-950 px-1">L{i}</span>
-                                        </div>
-                                    ))}
-                                </div>
+      // --- 7. EVENT LISTENERS ---
+      applyArrayBtn.addEventListener("click", () => {
+        try {
+          rootNode = parseArrayToTree(arrayInput.value);
+          errorBanner.classList.add("hidden");
+          selectedNodeId = null;
+          nodeEditorBar.classList.add("hidden");
+          stopPlayback();
+          states = generateSimulationStates(rootNode, traversalVariant);
+          currentStep = 0;
+          renderAll();
+        } catch (err) {
+          errorBanner.textContent = "Invalid array syntax. Use [3, 9, 20, null, null, 15, 7]";
+          errorBanner.classList.remove("hidden");
+        }
+      });
 
-                                {/* Ensure minimum width on mobile so graph isn't too tiny */}
-                                <div className="w-full h-full min-w-[600px] min-h-[400px] lg:min-w-0 lg:min-h-0">
-                                    <svg className="w-full h-full" viewBox={`-50 -50 ${viewBoxWidth + 100} ${viewBoxHeight + 100}`}>
-                                        {/* Edges */}
-                                        {layout.edges.map((edge, i) => {
-                                            const source = layout.nodes.find(n => n.id === edge.sourceId);
-                                            const target = layout.nodes.find(n => n.id === edge.targetId);
-                                            
-                                            const isTargetInQueue = currentState.inQueue.has(target.id);
-                                            const isActiveEdge = currentState.activeNode === source.id && isTargetInQueue;
-                                            const isVisited = currentState.visited.has(target.id);
+      arrayInput.addEventListener("keydown", e => {
+        if (e.key === "Enter") applyArrayBtn.click();
+      });
 
-                                            return (
-                                                <line 
-                                                    key={i}
-                                                    x1={source.x * 100} y1={source.y * 100} 
-                                                    x2={target.x * 100} y2={target.y * 100}
-                                                    className={`edge-transition ${isActiveEdge ? 'active-edge stroke-amber-400' : isVisited ? 'stroke-indigo-600' : 'stroke-slate-700'}`}
-                                                    strokeWidth={isActiveEdge ? 4 : 2}
-                                                />
-                                            )
-                                        })}
-                                        
-                                        {/* Nodes */}
-                                        {layout.nodes.map((node) => {
-                                            const isIdle = !currentState.inQueue.has(node.id) && !currentState.visited.has(node.id) && currentState.activeNode !== node.id;
-                                            const inQueue = currentState.inQueue.has(node.id);
-                                            const isActive = currentState.activeNode === node.id;
-                                            const isVisited = currentState.visited.has(node.id);
+      // Tabs: Array vs Traversal Reconstruction
+      const tabArray = document.getElementById("tabArray");
+      const tabTraversal = document.getElementById("tabTraversal");
+      const panelArray = document.getElementById("panelArray");
+      const panelTraversal = document.getElementById("panelTraversal");
 
-                                            let fillColor = "#1e293b"; // slate-800
-                                            let strokeColor = "#475569"; // slate-600
-                                            
-                                            if (inQueue) { fillColor = "#d97706"; strokeColor = "#fbbf24"; } // Amber
-                                            if (isActive) { fillColor = "#059669"; strokeColor = "#34d399"; } // Emerald
-                                            if (isVisited) { fillColor = "#4f46e5"; strokeColor = "#818cf8"; } // Indigo
+      tabArray.addEventListener("click", () => {
+        tabArray.className = "px-2.5 py-1 rounded bg-emerald-600 text-white font-medium transition";
+        tabTraversal.className = "px-2.5 py-1 rounded text-slate-400 hover:text-white transition";
+        panelArray.classList.remove("hidden");
+        panelTraversal.classList.add("hidden");
+      });
 
-                                            return (
-                                                <g key={node.id} className="node-transition" transform={`translate(${node.x * 100}, ${node.y * 100})`}>
-                                                    {isActive && <circle r="28" fill="none" className="stroke-emerald-400 animate-pulse-fast" strokeWidth="3" opacity="0.6" />}
-                                                    
-                                                    <circle r="20" fill={fillColor} stroke={strokeColor} strokeWidth="3" className="node-transition shadow-lg" />
-                                                    <text textAnchor="middle" dy=".3em" fill="#ffffff" className="font-mono font-bold text-xs lg:text-sm select-none">
-                                                        {node.val}
-                                                    </text>
-                                                    {inQueue && (
-                                                        <g transform="translate(14, -14)">
-                                                            <circle r="8" fill="#fbbf24" />
-                                                            <text textAnchor="middle" dy=".3em" fill="#000" fontSize="10" fontWeight="bold">
-                                                                {currentState.queue.findIndex(q => q.id === node.id) + 1}
-                                                            </text>
-                                                        </g>
-                                                    )}
-                                                </g>
-                                            )
-                                        })}
-                                    </svg>
-                                </div>
-                            </div>
+      tabTraversal.addEventListener("click", () => {
+        tabTraversal.className = "px-2.5 py-1 rounded bg-indigo-600 text-white font-medium transition";
+        tabArray.className = "px-2.5 py-1 rounded text-slate-400 hover:text-white transition";
+        panelTraversal.classList.remove("hidden");
+        panelTraversal.classList.add("flex");
+        panelArray.classList.add("hidden");
+      });
 
-                            {/* Live FIFO Queue Visualizer & Playback Control */}
-                            <div className="lg:h-48 border-t border-slate-800 bg-slate-900 flex flex-col shrink-0">
-                                <div className="px-3 lg:px-4 py-2 border-b border-slate-800/50 flex justify-between items-center text-[10px] lg:text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                    <span>Live Queue (FIFO)</span>
-                                    <span>Size: {currentState.queue.length}</span>
-                                </div>
-                                <div className="py-4 lg:py-0 flex-1 flex items-center px-4 lg:px-6 gap-3 overflow-x-auto min-h-[80px]">
-                                    <div className="text-slate-600 font-mono text-[10px] lg:text-sm tracking-widest border-r-2 border-slate-700 pr-2 lg:pr-4">FRONT</div>
-                                    {currentState.queue.map((item, i) => (
-                                        <div key={i} className="flex flex-col items-center animate-[bounce_0.2s_ease-out] shrink-0">
-                                            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded bg-amber-500/20 border border-amber-500 flex items-center justify-center text-amber-300 font-bold shadow-[0_0_10px_rgba(245,158,11,0.2)] text-xs lg:text-base">
-                                                {item.val}
-                                            </div>
-                                            <span className="text-[9px] lg:text-[10px] text-slate-500 mt-1">L{item.level}</span>
-                                        </div>
-                                    ))}
-                                    {currentState.queue.length === 0 && <div className="text-slate-600 italic text-xs lg:text-sm">Queue empty</div>}
-                                    <div className="text-slate-600 font-mono text-[10px] lg:text-sm tracking-widest border-l-2 border-slate-700 pl-2 lg:pl-4 ml-auto">REAR</div>
-                                </div>
+      document.getElementById("reconstructBtn").addEventListener("click", () => {
+        try {
+          const pre = document.getElementById("preorderInput").value.split(",").map(s => Number(s.trim()));
+          const ino = document.getElementById("inorderInput").value.split(",").map(s => Number(s.trim()));
+          rootNode = buildFromPreIn(pre, ino);
+          errorBanner.classList.add("hidden");
+          syncTreeChanges();
+        } catch (e) {
+          errorBanner.textContent = "Invalid Preorder/Inorder pair.";
+          errorBanner.classList.remove("hidden");
+        }
+      });
 
-                                {/* Playback Bar */}
-                                <div className="py-3 lg:py-0 lg:h-14 bg-slate-950 border-t border-slate-800 px-4 flex flex-wrap lg:flex-nowrap items-center gap-4 lg:gap-6 justify-center lg:justify-start">
-                                    <div className="flex gap-2">
-                                        <button onClick={() => { setIsPlaying(false); setCurrentStep(0); }} className="p-1.5 lg:p-2 rounded hover:bg-slate-800 transition" title="Reset">
-                                            <ResetIcon />
-                                        </button>
-                                        <button onClick={() => { setIsPlaying(false); setCurrentStep(Math.max(0, currentStep - 1)); }} className="p-1.5 lg:p-2 rounded hover:bg-slate-800 transition" title="Step Back">
-                                            <StepBackIcon />
-                                        </button>
-                                        <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 lg:p-2 rounded bg-slate-800 hover:bg-slate-700 transition w-10 flex justify-center border border-slate-700 shadow">
-                                            {isPlaying ? <PauseIcon /> : <PlayIcon />}
-                                        </button>
-                                        <button onClick={() => { setIsPlaying(false); setCurrentStep(Math.min(states.length - 1, currentStep + 1)); }} className="p-1.5 lg:p-2 rounded hover:bg-slate-800 transition" title="Step Forward">
-                                            <StepFwdIcon />
-                                        </button>
-                                    </div>
-                                    
-                                    <input 
-                                        type="range" 
-                                        min="0" 
-                                        max={states.length > 0 ? states.length - 1 : 0} 
-                                        value={currentStep}
-                                        onChange={(e) => { setIsPlaying(false); setCurrentStep(Number(e.target.value)); }}
-                                        className="w-full lg:flex-1 accent-emerald-500 order-last lg:order-none"
-                                    />
-                                    
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] lg:text-xs text-slate-500 font-mono">SPEED:</span>
-                                        <select 
-                                            value={speed} 
-                                            onChange={(e) => setSpeed(Number(e.target.value))}
-                                            className="bg-slate-900 border border-slate-700 text-xs rounded p-1 outline-none text-emerald-400"
-                                        >
-                                            <option value={2000}>0.5x</option>
-                                            <option value={1000}>1.0x</option>
-                                            <option value={500}>2.0x</option>
-                                            <option value={200}>4.0x</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+      // Presets
+      document.querySelectorAll(".preset-btn").forEach(btn => {
+        btn.addEventListener("click", function () {
+          const type = this.getAttribute("data-preset");
+          const presets = {
+            default: "[3, 9, 20, null, null, 15, 7]",
+            complete: "[1, 2, 3, 4, 5, 6, 7]",
+            bst: "[8, 4, 12, 2, 6, 10, 14]",
+            skewed: "[1, 2, null, 3, null, 4, null]"
+          };
+          if (type === "random") {
+            const count = Math.floor(Math.random() * 5) + 5;
+            const arr = [Math.floor(Math.random() * 50) + 1];
+            for (let i = 1; i < count; i++) {
+              arr.push(Math.random() > 0.22 ? Math.floor(Math.random() * 90) + 1 : "null");
+            }
+            arrayInput.value = "[" + arr.join(", ") + "]";
+          } else {
+            arrayInput.value = presets[type];
+          }
+          applyArrayBtn.click();
+        });
+      });
 
-                        {/* RIGHT SIDEBAR (Inspector) */}
-                        <div className="w-full lg:w-[35%] flex flex-col bg-slate-950 lg:h-full shrink-0">
-                            
-                            {/* Telemetry */}
-                            <div className="p-3 lg:p-4 grid grid-cols-2 gap-2 lg:gap-4 border-b border-slate-800 bg-slate-900/50">
-                                <div>
-                                    <div className="text-[9px] lg:text-[10px] text-slate-500 uppercase tracking-widest">Active Node</div>
-                                    <div className="text-base lg:text-lg font-mono text-emerald-400">{currentState.activeNode ? currentState.activeNode : '-'}</div>
-                                </div>
-                                <div>
-                                    <div className="text-[9px] lg:text-[10px] text-slate-500 uppercase tracking-widest">Visited Count</div>
-                                    <div className="text-base lg:text-lg font-mono text-indigo-400">{currentState.visited.size} / {layout.nodes.length}</div>
-                                </div>
-                                <div className="col-span-2 border-t border-slate-800 pt-2 flex justify-between">
-                                    <span className="text-[10px] lg:text-xs text-slate-400">Time: <span className="text-slate-200 font-mono">O(N)</span></span>
-                                    <span className="text-[10px] lg:text-xs text-slate-400">Space: <span className="text-slate-200 font-mono">O(W)</span></span>
-                                </div>
-                            </div>
+      // Variant Selector
+      variantSelect.addEventListener("change", function () {
+        traversalVariant = this.value;
+        stopPlayback();
+        states = generateSimulationStates(rootNode, traversalVariant);
+        currentStep = 0;
+        renderAll();
+      });
 
-                            {/* 2D Result Array */}
-                            <div className="p-3 lg:p-4 border-b border-slate-800 flex flex-col min-h-[120px] lg:min-h-[150px]">
-                                <div className="text-[10px] lg:text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 lg:mb-3">Result Array</div>
-                                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                                    {currentState.levels.length === 0 && <span className="text-slate-600 italic text-xs lg:text-sm">[]</span>}
-                                    {currentState.levels.map((lvl, i) => (
-                                        <div key={i} className="flex items-center gap-2 lg:gap-3">
-                                            <span className="text-[10px] lg:text-xs text-slate-500 font-mono w-4 lg:w-6">L{i}</span>
-                                            <div className="flex-1 bg-slate-900 rounded border border-slate-700/50 p-1.5 lg:p-2 flex flex-wrap gap-1.5 lg:gap-2">
-                                                {lvl.map((val, idx) => (
-                                                    <span key={idx} className="bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded text-xs lg:text-sm font-mono animate-[fade-in_0.3s]">
-                                                        {val}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+      // Playback Buttons
+      playPauseBtn.addEventListener("click", () => {
+        if (isPlaying) stopPlayback();
+        else startPlayback();
+      });
 
-                            {/* Synchronized Code Viewer */}
-                            <div className="p-3 lg:p-4 border-b border-slate-800 bg-slate-950">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-[10px] lg:text-xs font-semibold text-slate-400 uppercase tracking-wider">Algorithm Engine</span>
-                                </div>
-                                <CodeViewer activeLine={currentState.codeLine} />
-                            </div>
+      document.getElementById("resetBtn").addEventListener("click", () => {
+        stopPlayback();
+        currentStep = 0;
+        renderAll();
+      });
 
-                            {/* Execution Log */}
-                            <div className="p-3 lg:p-4 bg-black flex-1 flex flex-col justify-end min-h-[80px]">
-                                <div className="text-[9px] lg:text-[10px] text-slate-600 uppercase tracking-widest mb-1">Execution Log</div>
-                                <div className="text-xs lg:text-sm text-emerald-400 font-mono leading-relaxed border-l-2 border-emerald-500 pl-2 lg:pl-3 py-1">
-                                    > {currentState.log}
-                                </div>
-                            </div>
+      document.getElementById("stepBackBtn").addEventListener("click", () => {
+        stopPlayback();
+        currentStep = Math.max(0, currentStep - 1);
+        renderAll();
+      });
 
-                        </div>
-                    </div>
-                </div>
-            );
-        };
+      document.getElementById("stepFwdBtn").addEventListener("click", () => {
+        stopPlayback();
+        currentStep = Math.min(states.length - 1, currentStep + 1);
+        renderAll();
+      });
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+      timelineSlider.addEventListener("input", function () {
+        stopPlayback();
+        currentStep = Number(this.value);
+        renderAll();
+      });
+
+      speedSelect.addEventListener("change", function () {
+        speedMs = Number(this.value);
+      });
+
+      // Language Switcher
+      document.querySelectorAll(".lang-btn").forEach(btn => {
+        btn.addEventListener("click", function () {
+          activeLang = this.getAttribute("data-lang");
+          document.querySelectorAll(".lang-btn").forEach(b => {
+            b.className = "lang-btn px-2 py-0.5 rounded text-slate-400 hover:text-white font-mono";
+          });
+          this.className = "lang-btn px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-mono";
+          renderAll();
+        });
+      });
+
+      // Node Editor Bar Actions
+      document.getElementById("updateValBtn").addEventListener("click", () => {
+        const found = findNodeAndParent(rootNode, selectedNodeId);
+        if (found) {
+          found.node.val = Number(editNodeValInput.value) || 0;
+          syncTreeChanges();
+        }
+      });
+
+      document.getElementById("addLeftChildBtn").addEventListener("click", () => {
+        if (selectedNodeId) addChildToNode(selectedNodeId, "left");
+      });
+
+      document.getElementById("addRightChildBtn").addEventListener("click", () => {
+        if (selectedNodeId) addChildToNode(selectedNodeId, "right");
+      });
+
+      document.getElementById("deleteNodeBtn").addEventListener("click", () => {
+        const found = findNodeAndParent(rootNode, selectedNodeId);
+        if (!found) return;
+        if (!found.parent) {
+          rootNode = null;
+        } else if (found.parent.left && found.parent.left.id === selectedNodeId) {
+          found.parent.left = null;
+        } else if (found.parent.right && found.parent.right.id === selectedNodeId) {
+          found.parent.right = null;
+        }
+        selectedNodeId = null;
+        nodeEditorBar.classList.add("hidden");
+        syncTreeChanges();
+      });
+
+      document.getElementById("closeEditorBtn").addEventListener("click", () => {
+        selectedNodeId = null;
+        nodeEditorBar.classList.add("hidden");
+        renderAll();
+      });
+
+      // Zoom Controls
+      document.getElementById("zoomInBtn").addEventListener("click", () => {
+        zoomScale = Math.min(1.8, zoomScale + 0.2);
+        renderAll();
+      });
+      document.getElementById("zoomOutBtn").addEventListener("click", () => {
+        zoomScale = Math.max(0.6, zoomScale - 0.2);
+        renderAll();
+      });
+      document.getElementById("zoomResetBtn").addEventListener("click", () => {
+        zoomScale = 1;
+        renderAll();
+      });
+
+      // --- INITIALIZE ON LOAD ---
+      rootNode = parseArrayToTree(arrayInput.value);
+      states = generateSimulationStates(rootNode, traversalVariant);
+      renderAll();
+    })();
+  </script>
 </body>
 </html>
